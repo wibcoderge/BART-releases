@@ -1,0 +1,18 @@
+{
+  "version": "v0.3.0",
+  "notes": "BART v0.3.0: verified Windows and macOS release.",
+  "platforms": {
+    "windows": {
+      "installer_url": "https://github.com/wibcoderge/BART-releases/releases/download/v0.3.0/BART_Setup_v0.3.0.exe",
+      "sha256": "4b7ed24960bbbfe4b2c9b24441ad3a244b1f71cc614858fcf02f58cf57021d47"
+    },
+    "macos_arm64": {
+      "installer_url": "https://github.com/wibcoderge/BART-releases/releases/download/v0.3.0/BART_v0.3.0_macOS_arm64.dmg",
+      "sha256": "c4c95e8533019de0848b5f4b6a409b6dd1234d06e6ba889d474e284c53eb25cd"
+    },
+    "macos_x64": {
+      "installer_url": "https://github.com/wibcoderge/BART-releases/releases/download/v0.3.0/BART_v0.3.0_macOS_x64.dmg",
+      "sha256": "142a05896701d5fc64af4ca3ceaf24add2e8ded9665f8fb19f7efb12989a7840"
+    }
+  }
+}
