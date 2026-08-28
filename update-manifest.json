@@ -1,18 +1,18 @@
 {
-  "version": "v0.3.6",
-  "notes": "BART v0.3.6: verified Windows and macOS release.",
+  "version": "v0.3.7",
+  "notes": "BART v0.3.7: verified Windows and macOS release.",
   "platforms": {
     "windows": {
-      "installer_url": "https://github.com/wibcoderge/BART-releases/releases/download/v0.3.6/BART_Setup_v0.3.6.exe",
-      "sha256": "17e10fa36e31357e8025afe6d6ed3f0c8da617a56abcf6f1f1b5a32a04e7929b"
+      "installer_url": "https://github.com/wibcoderge/BART-releases/releases/download/v0.3.7/BART_Setup_v0.3.7.exe",
+      "sha256": "9795ff5ec060bc7bf621428f4a2ec6f58c03c6cb72bb96589e8b3b9a55f3ac15"
     },
     "macos_arm64": {
-      "installer_url": "https://github.com/wibcoderge/BART-releases/releases/download/v0.3.6/BART_v0.3.6_macOS_arm64.dmg",
-      "sha256": "fc5d8acf9b38a0cf2522dee9f82174e7e0e4da825e84cdb11057a7dfdf7845b1"
+      "installer_url": "https://github.com/wibcoderge/BART-releases/releases/download/v0.3.7/BART_v0.3.7_macOS_arm64.dmg",
+      "sha256": "9f91664c6cc33619880d24bffac6767b2761f4aa1cc3684c1cb8dbeeb29861de"
     },
     "macos_x64": {
-      "installer_url": "https://github.com/wibcoderge/BART-releases/releases/download/v0.3.6/BART_v0.3.6_macOS_x64.dmg",
-      "sha256": "af8b787d309bce6c3ef3de424b0ad5c53df75b3b87ce11c49a5c282980b3e050"
+      "installer_url": "https://github.com/wibcoderge/BART-releases/releases/download/v0.3.7/BART_v0.3.7_macOS_x64.dmg",
+      "sha256": "cc8c2c343e2dc3dbdb2c673a9822b84027e38b3bc7201d1d58f209a0bd4828bb"
     }
   }
 }
