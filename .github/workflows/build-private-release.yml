@@ -1,0 +1,188 @@
+name: Build BART release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version tag from the private BART-core repository
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: bart-release-${{ inputs.version }}
+  cancel-in-progress: false
+
+env:
+  CORE_REPOSITORY: wibcoderge/BART-core
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate version
+        shell: bash
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ env.CORE_REPOSITORY }}
+          ref: ${{ inputs.version }}
+          token: ${{ secrets.BART_CORE_TOKEN }}
+      - name: Verify source version
+        shell: bash
+        env:
+          VERSION: ${{ inputs.version }}
+        run: test "$(tr -d '\r\n' < VERSION.txt)" = "$VERSION"
+
+  test:
+    needs: validate
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-14]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ env.CORE_REPOSITORY }}
+          ref: ${{ inputs.version }}
+          token: ${{ secrets.BART_CORE_TOKEN }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install -r requirements.txt -r requirements-build.txt
+      - run: python -m unittest discover -s tests -v
+      - run: python -m compileall -q core desktop.py
+
+  prepare-release:
+    needs: test
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ inputs.version }}
+    steps:
+      - name: Prepare draft release
+        shell: bash
+        run: |
+          gh release view "$VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
+            gh release create "$VERSION" --repo "$GITHUB_REPOSITORY" \
+              --title "BART $VERSION" --generate-notes --draft
+
+  windows:
+    needs: prepare-release
+    runs-on: windows-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ env.CORE_REPOSITORY }}
+          ref: ${{ inputs.version }}
+          token: ${{ secrets.BART_CORE_TOKEN }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install -r requirements.txt -r requirements-build.txt
+      - name: Install Inno Setup
+        shell: powershell
+        run: choco install innosetup --no-progress -y
+      - name: Build installer
+        shell: cmd
+        run: build_installer.bat
+      - name: Upload Windows installer
+        shell: powershell
+        run: |
+          $installer = Get-ChildItem dist-installer/BART_Setup_*.exe | Select-Object -First 1
+          if (-not $installer) { throw "Windows installer was not created" }
+          gh release upload "$env:VERSION" "$($installer.FullName)" `
+            --repo "$env:GITHUB_REPOSITORY" --clobber
+
+  macos:
+    needs: prepare-release
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-14
+            arch: arm64
+          - runner: macos-15-intel
+            arch: x64
+    runs-on: ${{ matrix.runner }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ env.CORE_REPOSITORY }}
+          ref: ${{ inputs.version }}
+          token: ${{ secrets.BART_CORE_TOKEN }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: chmod +x build_release_macos.sh && ./build_release_macos.sh
+      - name: Upload macOS image
+        shell: bash
+        run: |
+          image="$(find dist -name 'BART_*_macOS_${{ matrix.arch }}.dmg' -print -quit)"
+          test -n "$image"
+          gh release upload "$VERSION" "$image" \
+            --repo "$GITHUB_REPOSITORY" --clobber
+
+  publish:
+    needs: [windows, macos]
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ env.CORE_REPOSITORY }}
+          ref: ${{ inputs.version }}
+          token: ${{ secrets.BART_CORE_TOKEN }}
+      - name: Download platform files from draft release
+        shell: bash
+        run: |
+          mkdir -p release-assets
+          gh release download "$VERSION" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern 'BART_Setup_*.exe' \
+            --pattern 'BART_*_macOS_arm64.dmg' \
+            --pattern 'BART_*_macOS_x64.dmg' \
+            --dir release-assets
+      - name: Build verified update manifest
+        shell: bash
+        run: |
+          python tools/build_update_manifest.py \
+            --version "$VERSION" \
+            --repository "$GITHUB_REPOSITORY" \
+            --windows "$(find release-assets -name 'BART_Setup_*.exe' -print -quit)" \
+            --macos-arm64 "$(find release-assets -name 'BART_*_macOS_arm64.dmg' -print -quit)" \
+            --macos-x64 "$(find release-assets -name 'BART_*_macOS_x64.dmg' -print -quit)" \
+            --notes "BART $VERSION: verified Windows and macOS release." \
+            --output release-assets/update-manifest.json
+      - name: Publish manifest and update launcher channel
+        shell: bash
+        run: |
+          gh release upload "$VERSION" release-assets/update-manifest.json \
+            --repo "$GITHUB_REPOSITORY" --clobber
+          encoded="$(base64 -w0 release-assets/update-manifest.json)"
+          sha="$(gh api "repos/${GITHUB_REPOSITORY}/contents/update-manifest.json" \
+            --jq .sha 2>/dev/null || true)"
+          args=(-X PUT "repos/${GITHUB_REPOSITORY}/contents/update-manifest.json" \
+            -f message="Publish $VERSION update manifest" -f content="$encoded")
+          if [ -n "$sha" ]; then args+=(-f sha="$sha"); fi
+          gh api "${args[@]}" >/dev/null
+      - name: Make verified release public
+        shell: bash
+        run: gh release edit "$VERSION" --repo "$GITHUB_REPOSITORY" --draft=false
